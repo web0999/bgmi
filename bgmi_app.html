@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BGMI Freeze Pro</title>
+    <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22BGMI%20Freeze%20Pro%22,%22short_name%22:%22BGMIFreeze%22,%22start_url%22:%22/%22,%22display%22:%22standalone%22,%22background_color%22:%22%230d1117%22,%22theme_color%22:%22%230d1117%22}">
+    <meta name="theme-color" content="#0d1117">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: #0d1117; color: #c9d1d9; padding: 15px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 14px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+        h1 { color: #58a6ff; text-align: center; font-size: 1.5rem; margin-bottom: 15px; font-weight: 800; letter-spacing: 1px; }
+        .badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
+        .status-idle { background: #21262d; color: #8b949e; }
+        .status-running { background: #238636; color: #fff; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        label { display: block; margin-top: 12px; font-size: 0.85rem; color: #8b949e; font-weight: 600; }
+        input { width: 100%; padding: 14px; margin-top: 6px; background: #0d1117; border: 1px solid #30363d; color: #fff; border-radius: 10px; font-size: 1rem; }
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        button { flex: 1; padding: 16px; border: none; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+        .btn-find { background: #d97706; color: white; width: 100%; margin-top: 10px; }
+        .btn-start { background: #dc2626; color: white; }
+        .btn-stop { background: #16a34a; color: white; }
+        .stats { display: flex; justify-content: space-between; margin-top: 20px; background: #0d1117; padding: 14px; border-radius: 10px; font-size: 0.95rem; }
+        .stat-val { font-weight: bold; color: #58a6ff; }
+        #logs { background: #000; border: 1px solid #30363d; border-radius: 10px; padding: 12px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; color: #3fb950; margin-top: 18px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🎮 BGMI FREEZE PRO</h1>
+        <div style="text-align: center; margin-bottom: 15px;">
+            <span id="status-badge" class="badge status-idle">STATUS: IDLE</span>
+        </div>
+
+        <button class="btn-find" onclick="autoFind()">⚡ AUTO FIND GAME IP & PORT</button>
+
+        <label>Target Server IP</label>
+        <input type="text" id="ip" placeholder="e.g. 1.1.1.1">
+
+        <label>Target Port</label>
+        <input type="number" id="port" placeholder="e.g. 17000">
+
+        <div style="display: flex; gap: 10px;">
+            <div style="flex:1;">
+                <label>Threads</label>
+                <input type="number" id="threads" value="150">
+            </div>
+            <div style="flex:1;">
+                <label>Time (Sec)</label>
+                <input type="number" id="duration" value="120">
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-start" id="btn-toggle" onclick="toggleAttack()">🚀 START ATTACK</button>
+        </div>
+
+        <div class="stats">
+            <div>Packets: <span class="stat-val" id="pkts">0</span></div>
+            <div>Data: <span class="stat-val" id="bytes">0 MB</span></div>
+        </div>
+
+        <div id="logs">Android Match Engine Initialized...\n</div>
+    </div>
+
+    <script>
+        let isRunning = false;
+
+        async function autoFind() {
+            log("🔍 Scanning active game connections...");
+            try {
+                let res = await fetch('/api/autofind');
+                let data = await res.json();
+                if(data.ip && data.port) {
+                    document.getElementById('ip').value = data.ip;
+                    document.getElementById('port').value = data.port;
+                    log("🎯 " + data.msg);
+                } else {
+                    log("⚠️ " + data.msg);
+                }
+            } catch(e) {
+                log("❌ Auto-find failed: " + e);
+            }
+        }
+
+        async function toggleAttack() {
+            if(isRunning) {
+                let res = await fetch('/api/stop');
+                let data = await res.json();
+                log(data.msg);
+            } else {
+                let ip = document.getElementById('ip').value.trim();
+                let port = document.getElementById('port').value.trim();
+                let threads = document.getElementById('threads').value.trim();
+                let duration = document.getElementById('duration').value.trim();
+
+                if(!ip || !port) {
+                    alert("Please enter IP and Port or click Auto Find!");
+                    return;
+                }
+
+                let res = await fetch(`/api/start?ip=${ip}&port=${port}&threads=${threads}&duration=${duration}`);
+                let data = await res.json();
+                log(data.msg);
+            }
+        }
+
+        function log(msg) {
+            let logBox = document.getElementById('logs');
+            logBox.innerHTML += msg + "<br>";
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        async function updateStatus() {
+            try {
+                let res = await fetch('/api/status');
+                let data = await res.json();
+                isRunning = data.is_running;
+
+                let badge = document.getElementById('status-badge');
+                let btn = document.getElementById('btn-toggle');
+                let pkts = document.getElementById('pkts');
+                let bytes = document.getElementById('bytes');
+
+                pkts.innerText = data.packets_sent.toLocaleString();
+                bytes.innerText = (data.bytes_sent / (1024*1024)).toFixed(2) + " MB";
+
+                if(isRunning) {
+                    badge.className = "badge status-running";
+                    badge.innerText = `ATTACKING ${data.ip}:${data.port}`;
+                    btn.className = "btn-stop";
+                    btn.innerText = "🛑 STOP ATTACK";
+                } else {
+                    badge.className = "badge status-idle";
+                    badge.innerText = "STATUS: IDLE";
+                    btn.className = "btn-start";
+                    btn.innerText = "🚀 START ATTACK";
+                }
+
+                if(data.log_history && data.log_history.length > 0) {
+                    let logBox = document.getElementById('logs');
+                    logBox.innerHTML = data.log_history.join("<br>");
+                    logBox.scrollTop = logBox.scrollHeight;
+                }
+            } catch(e) {}
+        }
+
+        setInterval(updateStatus, 1000);
+    </script>
+</body>
+</html>
